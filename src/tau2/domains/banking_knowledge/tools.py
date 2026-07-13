@@ -35,6 +35,7 @@ from tau2.environment.toolkit import (
     DISCOVERABLE_ATTR,
     ToolKitBase,
     ToolType,
+    coerce_numeric_args,
     is_discoverable_tool,
     is_tool,
 )
@@ -664,7 +665,7 @@ class KnowledgeTools(ToolKitBase):
         # Get the method and call it directly with the parsed arguments
         method = self.get_discoverable_tools()[agent_tool_name]
         try:
-            result = method(**args_dict)
+            result = method(**coerce_numeric_args(method, args_dict))
         except TypeError as e:
             return f"Error: Invalid arguments: {e}"
 
@@ -2739,7 +2740,7 @@ For deposits without available images, the dispute will proceed based on custome
         account["current_holdings"] = f"${new_balance:.2f}"
 
         # Create transaction record
-        transaction_id = f"txn_{_deterministic_id(f'checking_credit:{account_id}:{credit_type}:{amount}:{get_today_str()}')}"
+        transaction_id = f"txn_{_deterministic_id(f'checking_credit:{account_id}:{credit_type}:{float(amount):.2f}:{get_today_str()}')}"
 
         if credit_type == "rebate_credit":
             description = "REBATE CREDIT - CUSTOMER SERVICE"
@@ -2818,7 +2819,7 @@ For deposits without available images, the dispute will proceed based on custome
         account["current_holdings"] = f"{new_balance:.2f}"
 
         # Create transaction record
-        transaction_id = f"txn_{_deterministic_id(f'savings_credit:{account_id}:{credit_type}:{amount}:{get_today_str()}')}"
+        transaction_id = f"txn_{_deterministic_id(f'savings_credit:{account_id}:{credit_type}:{float(amount):.2f}:{get_today_str()}')}"
 
         if credit_type == "interest_correction":
             description = "INTEREST CORRECTION - CUSTOMER SERVICE"
@@ -2899,7 +2900,7 @@ For deposits without available images, the dispute will proceed based on custome
         if user is None:
             return f"Error: User '{user_id}' not found."
 
-        report_id = f"IDR_{_deterministic_id(f'interest_report:{account_id}:{user_id}:{expected_apy}:{actual_apy}:{get_today_str()}')}"
+        report_id = f"IDR_{_deterministic_id(f'interest_report:{account_id}:{user_id}:{float(expected_apy)}:{float(actual_apy)}:{get_today_str()}')}"
 
         report_record = {
             "report_id": report_id,
@@ -4474,7 +4475,7 @@ class KnowledgeUserTools(ToolKitBase):
         # Call the method directly - it handles checking if tool was given,
         # logging the call, and executing the business logic
         try:
-            return method(**args_dict)
+            return method(**coerce_numeric_args(method, args_dict))
         except TypeError as e:
             return f"Error: Invalid arguments for tool '{discoverable_tool_name}': {e}"
 

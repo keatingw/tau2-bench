@@ -1,5 +1,17 @@
+import inspect
+import types
 from enum import Enum
-from typing import Annotated, Any, Callable, Dict, Optional, TypeVar
+from typing import (
+    Annotated,
+    Any,
+    Callable,
+    Dict,
+    Optional,
+    TypeVar,
+    Union,
+    get_args,
+    get_origin,
+)
 
 from pydantic import BaseModel, Field
 
@@ -124,6 +136,46 @@ def is_discoverable_tool(
     return decorator
 
 
+def _numeric_annotation(annotation: Any) -> Optional[type]:
+    """Return float or int if the annotation is (Optional[]) float/int, else None."""
+    if annotation is float or annotation is int:
+        return annotation
+    origin = get_origin(annotation)
+    if origin is Union or origin is types.UnionType:
+        args = [a for a in get_args(annotation) if a is not type(None)]
+        if len(args) == 1 and args[0] in (float, int):
+            return args[0]
+    return None
+
+
+def coerce_numeric_args(func: Callable, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    """Coerce numeric arguments to the numeric type the function declares.
+
+    LLM tool calls arrive as parsed JSON, where `33` becomes int and `33.0`
+    becomes float regardless of the parameter's annotation. Nothing on the
+    call path validates arguments, so the emitted formatting flows into DB
+    records and deterministic-ID seeds, making evaluation depend on number
+    formatting rather than behavior. This narrows the gap at the boundary:
+    int -> float for float-annotated params, integral float -> int for
+    int-annotated params. Strings and un-annotated params are never touched,
+    so anything that errors today still errors identically.
+    """
+    try:
+        params = inspect.signature(func).parameters
+    except (TypeError, ValueError):
+        return kwargs
+    coerced: Dict[str, Any] = {}
+    for name, value in kwargs.items():
+        param = params.get(name)
+        target = _numeric_annotation(param.annotation) if param is not None else None
+        if target is float and isinstance(value, int) and not isinstance(value, bool):
+            value = float(value)
+        elif target is int and isinstance(value, float) and value.is_integer():
+            value = int(value)
+        coerced[name] = value
+    return coerced
+
+
 class ToolKitBase(metaclass=ToolKitType):
     """Base class for ToolKit classes."""
 
@@ -139,7 +191,8 @@ class ToolKitBase(metaclass=ToolKitType):
         """Use a tool."""
         if tool_name not in self.tools:
             raise ValueError(f"Tool '{tool_name}' not found.")
-        return self.tools[tool_name](**kwargs)
+        func = self.tools[tool_name]
+        return func(**coerce_numeric_args(func, kwargs))
 
     def get_tools(self, include: Optional[list[str]] = None) -> Dict[str, Tool]:
         """Get the non-discoverable tools available in the ToolKit.

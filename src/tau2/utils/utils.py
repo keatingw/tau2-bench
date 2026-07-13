@@ -36,12 +36,37 @@ if not DATA_DIR.exists():
     logger.warning("Or ensure the data directory exists in the expected location")
 
 
+def canonicalize_json_numbers(obj):
+    """
+    Recursively convert integral floats to ints (33.0 -> 33) so that values
+    which are numerically equal serialize to the same JSON text.
+
+    JSON does not distinguish int from float, but json.dumps renders 33 and
+    33.0 differently, so two semantically identical structures can hash
+    differently depending only on how a number was formatted upstream (e.g.
+    an LLM emitting `33` vs `33.00` in a tool call). Bools are untouched
+    (bool is an int subclass but a distinct JSON type).
+    """
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, float) and obj.is_integer():
+        return int(obj)
+    if isinstance(obj, dict):
+        return {k: canonicalize_json_numbers(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [canonicalize_json_numbers(v) for v in obj]
+    return obj
+
+
 def get_dict_hash(obj: dict) -> str:
     """
     Generate a unique hash for dict.
     Returns a hex string representation of the hash.
+
+    Numbers are canonicalized before hashing so that structures differing
+    only in int-vs-integral-float formatting (33 vs 33.0) hash identically.
     """
-    hash_string = json.dumps(obj, sort_keys=True, default=str)
+    hash_string = json.dumps(canonicalize_json_numbers(obj), sort_keys=True, default=str)
     return hashlib.sha256(hash_string.encode()).hexdigest()
 
 
