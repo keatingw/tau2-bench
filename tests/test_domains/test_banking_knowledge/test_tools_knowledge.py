@@ -766,6 +766,27 @@ class TestCallDiscoverableAgentTool:
         assert "Error" in resp.content
         assert "Invalid JSON" in resp.content
 
+    def test_call_with_non_object_json_uses_invalid_arguments_path(
+        self, environment: Environment
+    ) -> None:
+        call(
+            environment,
+            "unlock_discoverable_agent_tool",
+            {"agent_tool_name": "update_transaction_rewards_3847"},
+        )
+        resp = call(
+            environment,
+            "call_discoverable_agent_tool",
+            {
+                "agent_tool_name": "update_transaction_rewards_3847",
+                "arguments": "[]",
+            },
+        )
+
+        assert not resp.error
+        assert resp.content.startswith("Error: Invalid arguments:")
+        assert "argument after ** must be a mapping, not list" in resp.content
+
 
 class TestCallDiscoverableUserTool:
     """Tests for call_discoverable_user_tool."""
@@ -796,6 +817,30 @@ class TestCallDiscoverableUserTool:
             requestor="user",
         )
         assert "Error" in resp.content
+
+    def test_call_with_non_object_json_uses_invalid_arguments_path(
+        self, environment: Environment
+    ) -> None:
+        call(
+            environment,
+            "give_discoverable_user_tool",
+            {"discoverable_tool_name": "deposit_check_3847"},
+        )
+        resp = call(
+            environment,
+            "call_discoverable_user_tool",
+            {
+                "discoverable_tool_name": "deposit_check_3847",
+                "arguments": '["account_id", "check_amount"]',
+            },
+            requestor="user",
+        )
+
+        assert not resp.error
+        assert resp.content.startswith(
+            "Error: Invalid arguments for tool 'deposit_check_3847':"
+        )
+        assert "argument after ** must be a mapping, not list" in resp.content
 
 
 # =============================================================================

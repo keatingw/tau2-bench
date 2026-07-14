@@ -24,6 +24,7 @@ from tau2.data_model.message import (
 from tau2.data_model.tasks import EvaluationCriteria, RewardType, Task
 from tau2.domains.banking_knowledge.data_model import DatabaseTable, TransactionalDB
 from tau2.domains.banking_knowledge.tools import KnowledgeTools, KnowledgeUserTools
+from tau2.domains.banking_knowledge.utils import generate_application_id
 from tau2.environment.environment import Environment
 from tau2.evaluator.evaluator_env import EnvironmentEvaluator
 
@@ -80,6 +81,7 @@ def make_env(db: TransactionalDB | None = None, solo_mode: bool = False) -> Envi
         policy="",
         tools=KnowledgeTools(db),
         user_tools=KnowledgeUserTools(db),
+        solo_mode=solo_mode,
     )
 
 
@@ -89,7 +91,7 @@ def assert_db_hashes_equal(env_a: Environment, env_b: Environment) -> None:
 
 
 class TestArchetype1CreditCardApplication:
-    def test_annual_income_formatting_does_not_change_db(self):
+    def test_annual_income_formatting_does_not_change_db(self) -> None:
         env_int, env_float = make_env(), make_env()
         for env, income in ((env_int, 85000), (env_float, 85000.00)):
             result = env.make_tool_call(
@@ -102,9 +104,15 @@ class TestArchetype1CreditCardApplication:
             assert "Error" not in result
         assert_db_hashes_equal(env_int, env_float)
 
+    def test_non_integral_income_preserves_existing_id(self) -> None:
+        assert (
+            generate_application_id("Platinum Rewards Card", "Pat Doe", 85000.5, False)
+            == "38fa74399791659f"
+        )
+
 
 class TestArchetype2SavingsCredit:
-    def test_credit_amount_formatting_does_not_change_db(self):
+    def test_credit_amount_formatting_does_not_change_db(self) -> None:
         env_int, env_float = make_env(), make_env()
         for env, amount in ((env_int, 33), (env_float, 33.00)):
             result = env.make_tool_call(
@@ -119,7 +127,7 @@ class TestArchetype2SavingsCredit:
 
 
 class TestArchetype3DiscoverableCallLogging:
-    def test_user_tool_call_args_formatting_does_not_change_db(self):
+    def test_user_tool_call_args_formatting_does_not_change_db(self) -> None:
         env_int, env_float = make_env(), make_env()
         for env, amount_json in ((env_int, "200"), (env_float, "200.00")):
             give = env.make_tool_call(
@@ -141,7 +149,7 @@ class TestArchetype3DiscoverableCallLogging:
 
 
 class TestArchetype4ValueOnlyRecord:
-    def test_cli_request_amount_formatting_does_not_change_db(self):
+    def test_cli_request_amount_formatting_does_not_change_db(self) -> None:
         env_int, env_float = make_env(), make_env()
         for env, amount in ((env_int, 2500), (env_float, 2500.0)):
             result = env.make_tool_call(
@@ -156,7 +164,7 @@ class TestArchetype4ValueOnlyRecord:
 
 
 class TestEvaluatorEndToEnd:
-    def test_int_emitting_trajectory_matches_float_authored_gold(self):
+    def test_int_emitting_trajectory_matches_float_authored_gold(self) -> None:
         """Gold actions authored `33.00`, trajectory emitted `33` -> db_match."""
         task = Task(
             id="numeric_regression",
@@ -177,25 +185,25 @@ class TestEvaluatorEndToEnd:
                 reward_basis=[RewardType.DB],
             ),
         )
+        tool_call = ToolCall(
+            id="t1",
+            name="apply_savings_account_credit_6831",
+            arguments={
+                "account_id": "sav_u1_gold",
+                "amount": 33,
+                "credit_type": "interest_correction",
+            },
+        )
+        recorded_response = make_env().get_response(tool_call)
         trajectory = [
             UserMessage(id="1", role="user", content="I'm owed a $33 correction"),
             AssistantMessage(
                 id="2",
                 role="assistant",
                 content=None,
-                tool_calls=[
-                    ToolCall(
-                        id="t1",
-                        name="apply_savings_account_credit_6831",
-                        arguments={
-                            "account_id": "sav_u1_gold",
-                            "amount": 33,
-                            "credit_type": "interest_correction",
-                        },
-                    )
-                ],
+                tool_calls=[tool_call],
             ),
-            ToolMessage(id="t1", role="tool", content="Credit applied successfully!"),
+            recorded_response,
             AssistantMessage(id="3", role="assistant", content="Done."),
         ]
         reward_info = EnvironmentEvaluator.calculate_reward(
@@ -206,3 +214,30 @@ class TestEvaluatorEndToEnd:
         assert reward_info.db_check is not None
         assert reward_info.db_check.db_match
         assert reward_info.reward == 1.0
+
+    def test_replay_rejects_tool_output_mismatch(self) -> None:
+        tool_call = ToolCall(
+            id="t1",
+            name="apply_savings_account_credit_6831",
+            arguments={
+                "account_id": "sav_u1_gold",
+                "amount": 33,
+                "credit_type": "interest_correction",
+            },
+        )
+        trajectory = [
+            AssistantMessage(
+                id="1",
+                role="assistant",
+                content=None,
+                tool_calls=[tool_call],
+            ),
+            ToolMessage(id="t1", role="tool", content="mismatched output"),
+        ]
+
+        with pytest.raises(ValueError, match="Tool call"):
+            make_env().set_state(
+                initialization_data=None,
+                initialization_actions=None,
+                message_history=trajectory,
+            )

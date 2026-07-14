@@ -385,14 +385,7 @@ class Environment:
             except json.JSONDecodeError:
                 expected_content = expected_response.content
             if content != expected_content:
-                # A divergence here usually means the environment code changed
-                # since the trajectory was recorded (e.g. a fix to deterministic
-                # ID generation or response formatting). The graded ground truth
-                # is the resulting DB state, not the response echo, so replay
-                # must continue — raising would make historical trajectories
-                # un-regradable after any tool fix.
-                logger.warning(
-                    f"Replayed tool output differs from recorded output.\n"
+                raise ValueError(
                     f"Tool call:\n{tool_call}\n\nReturned:\n{response}\n\nExpected:\n{expected_response}"
                 )
         self.sync_tools()

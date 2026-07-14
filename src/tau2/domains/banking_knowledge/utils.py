@@ -5,7 +5,7 @@ import json
 from datetime import date, datetime
 from typing import Any, Dict, Optional
 
-from tau2.utils.utils import DATA_DIR, canonicalize_json_numbers
+from tau2.utils.utils import DATA_DIR
 
 # Fixed date for the knowledge domain (all scenarios are set at this time)
 KNOWLEDGE_FIXED_DATE = date(2025, 11, 14)
@@ -142,7 +142,7 @@ def generate_application_id(
     Returns:
         16-character hex application ID
     """
-    seed = f"credit_card:{card_type}:{customer_name}:{float(annual_income):.2f}:{rho_bank_subscription}"
+    seed = f"credit_card:{card_type}:{customer_name}:{annual_income}:{rho_bank_subscription}"
     return _deterministic_id(seed, length=16)
 
 
@@ -194,7 +194,7 @@ def generate_user_discoverable_tool_call_id(
     Returns:
         16-character hex ID
     """
-    seed = f"user_discoverable_tool_call:{tool_name}:{json.dumps(canonicalize_json_numbers(arguments), sort_keys=True)}"
+    seed = f"user_discoverable_tool_call:{tool_name}:{json.dumps(arguments, sort_keys=True)}"
     return _deterministic_id(seed, length=16)
 
 
@@ -263,7 +263,7 @@ def generate_agent_discoverable_tool_call_id(
     Returns:
         16-character hex ID
     """
-    seed = f"agent_discoverable_tool_call:{tool_name}:{json.dumps(canonicalize_json_numbers(arguments), sort_keys=True)}"
+    seed = f"agent_discoverable_tool_call:{tool_name}:{json.dumps(arguments, sort_keys=True)}"
     return _deterministic_id(seed, length=16)
 
 

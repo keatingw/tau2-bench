@@ -5,6 +5,7 @@ import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from deepdiff import DeepDiff
 from dotenv import load_dotenv
@@ -36,7 +37,7 @@ if not DATA_DIR.exists():
     logger.warning("Or ensure the data directory exists in the expected location")
 
 
-def canonicalize_json_numbers(obj):
+def canonicalize_json_numbers(obj: Any) -> Any:
     """
     Recursively convert integral floats to ints (33.0 -> 33) so that values
     which are numerically equal serialize to the same JSON text.
@@ -66,7 +67,9 @@ def get_dict_hash(obj: dict) -> str:
     Numbers are canonicalized before hashing so that structures differing
     only in int-vs-integral-float formatting (33 vs 33.0) hash identically.
     """
-    hash_string = json.dumps(canonicalize_json_numbers(obj), sort_keys=True, default=str)
+    hash_string = json.dumps(
+        canonicalize_json_numbers(obj), sort_keys=True, default=str
+    )
     return hashlib.sha256(hash_string.encode()).hexdigest()
 
 

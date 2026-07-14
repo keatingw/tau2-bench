@@ -136,7 +136,7 @@ def is_discoverable_tool(
     return decorator
 
 
-def _numeric_annotation(annotation: Any) -> Optional[type]:
+def _numeric_annotation(annotation: Any) -> type | None:
     """Return float or int if the annotation is (Optional[]) float/int, else None."""
     if annotation is float or annotation is int:
         return annotation
@@ -148,7 +148,9 @@ def _numeric_annotation(annotation: Any) -> Optional[type]:
     return None
 
 
-def coerce_numeric_args(func: Callable, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+def coerce_numeric_args(
+    func: Callable[..., Any], kwargs: dict[str, Any]
+) -> dict[str, Any]:
     """Coerce numeric arguments to the numeric type the function declares.
 
     LLM tool calls arrive as parsed JSON, where `33` becomes int and `33.0`
@@ -164,7 +166,7 @@ def coerce_numeric_args(func: Callable, kwargs: Dict[str, Any]) -> Dict[str, Any
         params = inspect.signature(func).parameters
     except (TypeError, ValueError):
         return kwargs
-    coerced: Dict[str, Any] = {}
+    coerced: dict[str, Any] = {}
     for name, value in kwargs.items():
         param = params.get(name)
         target = _numeric_annotation(param.annotation) if param is not None else None
